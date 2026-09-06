@@ -1,83 +1,126 @@
 package service;
 
+import dao.AccountDAO;
 import exception.InsufficientFundsException;
 import exception.InvalidAmountException;
 import model.Account;
 import model.CurrentAccount;
 import model.SavingsAccount;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class Bank {
-    // Best Practice: Use the Interface (Map) as the reference type, 
-    // and the concrete class (HashMap) for the object implementation.
-    private Map<String, Account> accounts;
+    // Delegate all storage operations to the DAO
+    private AccountDAO accountDAO;
 
     public Bank() {
-        this.accounts = new HashMap<>();
+        this.accountDAO = new AccountDAO();
     }
 
-    public void createSavingsAccount(String accNum, String name, double initialBalance) {
-        if (accounts.containsKey(accNum)) {
-            System.out.println("Error: Account " + accNum + " already exists.");
-            return;
+    public String createSavingsAccount(String accNum, String name, double initialBalance) {
+        if (initialBalance < 0) {
+            String msg = "Error: Initial balance cannot be negative.";
+            System.out.println(msg);
+            return msg;
+        }
+        if (accountDAO.findByAccountNumber(accNum) != null) {
+            String msg = "Error: Account " + accNum + " already exists.";
+            System.out.println(msg);
+            return msg;
         }
         Account account = new SavingsAccount(accNum, name, initialBalance);
-        accounts.put(accNum, account);
-        System.out.println("Savings Account created successfully.");
+        if (accountDAO.save(account, "SAVINGS")) {
+            String msg = "Savings Account created successfully.";
+            System.out.println(msg);
+            return msg;
+        }
+        String msg = "Error saving account to database.";
+        System.out.println(msg);
+        return msg;
     }
 
-    public void createCurrentAccount(String accNum, String name, double initialBalance) {
-        if (accounts.containsKey(accNum)) {
-            System.out.println("Error: Account " + accNum + " already exists.");
-            return;
+    public String createCurrentAccount(String accNum, String name, double initialBalance) {
+        if (initialBalance < 0) {
+            String msg = "Error: Initial balance cannot be negative.";
+            System.out.println(msg);
+            return msg;
+        }
+        if (accountDAO.findByAccountNumber(accNum) != null) {
+            String msg = "Error: Account " + accNum + " already exists.";
+            System.out.println(msg);
+            return msg;
         }
         Account account = new CurrentAccount(accNum, name, initialBalance);
-        accounts.put(accNum, account);
-        System.out.println("Current Account created successfully.");
+        if (accountDAO.save(account, "CURRENT")) {
+            String msg = "Current Account created successfully.";
+            System.out.println(msg);
+            return msg;
+        }
+        String msg = "Error saving account to database.";
+        System.out.println(msg);
+        return msg;
     }
 
-    // Notice we are passing the exceptions UP to whoever calls this method (the UI layer)
-    public void deposit(String accNum, double amount) throws InvalidAmountException {
+    public String deposit(String accNum, double amount) throws InvalidAmountException {
         Account account = getAccount(accNum);
         if (account != null) {
             account.deposit(amount);
-            System.out.println("Successfully deposited $" + amount);
+            // Persist the updated balance back to PostgreSQL
+            accountDAO.updateBalance(account);
+            String msg = "Successfully deposited $" + amount + ". New balance: $" + account.getBalance();
+            System.out.println(msg);
+            return msg;
         }
+        throw new InvalidAmountException("Account " + accNum + " not found.");
     }
 
-    public void withdraw(String accNum, double amount) throws InvalidAmountException, InsufficientFundsException {
+    public String withdraw(String accNum, double amount) throws InvalidAmountException, InsufficientFundsException {
         Account account = getAccount(accNum);
         if (account != null) {
             account.withdraw(amount);
-            System.out.println("Successfully withdrew $" + amount);
+            // Persist the updated balance back to PostgreSQL
+            accountDAO.updateBalance(account);
+            String msg = "Successfully withdrew $" + amount + ". Remaining balance: $" + account.getBalance();
+            System.out.println(msg);
+            return msg;
         }
+        throw new InvalidAmountException("Account " + accNum + " not found.");
     }
 
-    public void transfer(String fromAccNum, String toAccNum, double amount) throws InvalidAmountException, InsufficientFundsException {
+    public String transfer(String fromAccNum, String toAccNum, double amount) throws InvalidAmountException, InsufficientFundsException {
         Account fromAccount = getAccount(fromAccNum);
-        Account toAccount = getAccount(toAccNum);
-
-        if (fromAccount != null && toAccount != null) {
-            // Order matters: withdraw first so if it throws an exception (e.g., insufficient funds),
-            // the method stops executing and the deposit never happens.
-            fromAccount.withdraw(amount);
-            toAccount.deposit(amount);
-            System.out.println("Successfully transferred $" + amount);
+        if (fromAccount == null) {
+            throw new InvalidAmountException("Source account " + fromAccNum + " not found.");
         }
+        Account toAccount = getAccount(toAccNum);
+        if (toAccount == null) {
+            throw new InvalidAmountException("Destination account " + toAccNum + " not found.");
+        }
+
+        // Withdraw and deposit in memory first
+        fromAccount.withdraw(amount);
+        toAccount.deposit(amount);
+        
+        // Update both accounts in the database
+        accountDAO.updateBalance(fromAccount);
+        accountDAO.updateBalance(toAccount);
+        String msg = "Successfully transferred $" + amount + " from " + fromAccNum + " to " + toAccNum;
+        System.out.println(msg);
+        return msg;
     }
 
-    public void printStatement(String accNum) {
+    public String printStatement(String accNum) {
         Account account = getAccount(accNum);
         if (account != null) {
-            System.out.println(account.toString());
+            String stmt = account.toString();
+            System.out.println(stmt);
+            return stmt;
         }
+        String msg = "Error: Account " + accNum + " not found.";
+        System.out.println(msg);
+        return msg;
     }
 
-    // Private helper method to prevent repeating the "is account null" check
-    private Account getAccount(String accNum) {
-        Account account = accounts.get(accNum);
+    public Account getAccount(String accNum) {
+        Account account = accountDAO.findByAccountNumber(accNum);
         if (account == null) {
             System.out.println("Error: Account " + accNum + " not found.");
         }

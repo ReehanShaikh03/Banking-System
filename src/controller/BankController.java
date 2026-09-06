@@ -1,4 +1,4 @@
-package app;
+package controller;
 
 import exception.InsufficientFundsException;
 import exception.InvalidAmountException;
@@ -6,7 +6,7 @@ import service.Bank;
 
 import java.util.Scanner;
 
-public class BankApp {
+public class BankController {
     public static void main(String[] args) {
         Bank bank = new Bank();
         Scanner scanner = new Scanner(System.in);

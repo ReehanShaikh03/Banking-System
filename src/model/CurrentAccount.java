@@ -7,7 +7,11 @@ public class CurrentAccount extends Account {
 
     public CurrentAccount(String accountNumber, String holderName, double initialBalance) {
         super(accountNumber, holderName, initialBalance);
-        this.overdraftLimit = 1000;
+        this.overdraftLimit = 1000.0;
+    }
+
+    public double getOverdraftLimit() {
+        return overdraftLimit;
     }
 
     @Override
